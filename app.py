@@ -15,7 +15,7 @@ app = Flask(__name__)
 # Get DB_URI from environ variable (useful for production/testing) or,
 # if not set there, use development local db.
 app.config['SQLALCHEMY_DATABASE_URI'] = (
-    os.environ.get('DATABASE_URL', 'postgres:///warbler'))
+    os.environ.get('DATABASE_URL', 'postgres:///warbler-test'))
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SQLALCHEMY_ECHO'] = True
@@ -179,7 +179,7 @@ def users_show(user_id):
                 .limit(100)
                 .all())
     likes = [like.message_id for like in Likes.query.filter(
-        Likes.user_id == g.user.id).all()]
+        Likes.user_id == user_id).all()]
     return render_template('users/show.html', user=user, messages=messages, likes=likes)
 
 
@@ -216,7 +216,7 @@ def users_likes(user_id):
         return redirect("/")
     user = User.query.get_or_404(user_id)
     likes = [like.message_id for like in Likes.query.filter(
-        Likes.user_id == g.user.id).all()]
+        Likes.user_id == user_id).all()]
     messages = (Message
                 .query
                 .filter(Message.id.in_(likes))
@@ -239,7 +239,7 @@ def add_follow(follow_id):
     g.user.following.append(followed_user)
     db.session.commit()
 
-    return redirect(f"/users/{g.user.id}/following")
+    return redirect(f"/users/{follow_id}/following")
 
 
 @app.route('/users/stop-following/<int:follow_id>', methods=['POST'])
@@ -334,7 +334,7 @@ def messages_add():
 def messages_show(message_id):
     """Show a message."""
 
-    msg = Message.query.get(message_id)
+    msg = Message.query.get_or_404(message_id)
     return render_template('messages/show.html', message=msg)
 
 
@@ -346,7 +346,10 @@ def messages_destroy(message_id):
         flash("Access unauthorized.", "danger")
         return redirect("/")
 
-    msg = Message.query.get(message_id)
+    msg = Message.query.get_or_404(message_id)
+    if msg.user_id != g.user.id:
+        flash("Access unauthorized.", "danger")
+        return redirect("/")
     db.session.delete(msg)
     db.session.commit()
 
@@ -381,6 +384,12 @@ def homepage():
 
     else:
         return render_template('home-anon.html')
+
+@app.errorhandler(404)
+def page_not_found(e):
+    """404 Not Found"""
+
+    return render_template("404.html"), 404
 
 
 ##############################################################################
